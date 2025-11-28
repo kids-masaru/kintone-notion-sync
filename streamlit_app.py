@@ -12,7 +12,27 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from sync_kintone_notion import run_script_A, run_script_B
 
-st.set_page_config(page_title="Kintone-Notion Sync", page_icon="🔄")
+import base64
+
+st.set_page_config(page_title="Kintone-Notion Sync", page_icon="static/icon.png")
+
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+def set_apple_touch_icon(image_path):
+    try:
+        bin_str = get_base64_of_bin_file(image_path)
+        page_icon_html = f"""
+        <link rel="apple-touch-icon" href="data:image/png;base64,{bin_str}" />
+        <link rel="icon" href="data:image/png;base64,{bin_str}" />
+        """
+        st.markdown(page_icon_html, unsafe_allow_html=True)
+    except Exception as e:
+        st.warning(f"Could not load icon for home screen: {e}")
+
+set_apple_touch_icon("static/icon.png")
 
 st.title("🔄 Kintone-Notion Sync App")
 
