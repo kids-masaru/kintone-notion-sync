@@ -44,7 +44,7 @@ def search_notion_page(database_id: str, rec_no: int) -> str:
 # 共通処理関数
 # ---------------------------
 
-def process_records(filter_date: str, k_sub: str, k_app: str, k_token: str, notion_db_id: str, field_mapping: dict):
+def process_records(start_date: str, end_date: str, k_sub: str, k_app: str, k_token: str, notion_db_id: str, field_mapping: dict, progress_callback=None):
     # レコード取得処理
     def fetch_kintone_records(query_filter):
         records = []
@@ -52,9 +52,12 @@ def process_records(filter_date: str, k_sub: str, k_app: str, k_token: str, noti
 
         while True:
             try:
+                # 日付範囲でフィルタリング
+                query = f'{query_filter} >= "{start_date}T00:00:00Z" and {query_filter} <= "{end_date}T23:59:59Z" order by 更新日時 asc limit {limit} offset {offset}'
+                
                 params = {
                     "app": k_app,
-                    "query": f'{query_filter} >= "{filter_date}T00:00:00Z" order by 更新日時 asc limit {limit} offset {offset}',
+                    "query": query,
                 }
                 
                 response = requests.get(
@@ -82,11 +85,11 @@ def process_records(filter_date: str, k_sub: str, k_app: str, k_token: str, noti
         return records
 
     # レコード取得
-    print(f"[{k_app}] 更新日時基準のレコード取得開始")
+    print(f"[{k_app}] 更新日時基準のレコード取得開始 ({start_date} ～ {end_date})")
     updated_records = fetch_kintone_records("更新日時")
     print(f"[{k_app}] 更新対象レコード数: {len(updated_records)}件")
 
-    print(f"[{k_app}] 作成日時基準のレコード取得開始")
+    print(f"[{k_app}] 作成日時基準のレコード取得開始 ({start_date} ～ {end_date})")
     created_records = fetch_kintone_records("作成日時")
     print(f"[{k_app}] 新規作成対象レコード数: {len(created_records)}件")
 
@@ -106,7 +109,8 @@ def process_records(filter_date: str, k_sub: str, k_app: str, k_token: str, noti
             seen_ids.add(rec_id)
             all_records.append(rec)
 
-    print(f"[{k_app}] 総処理レコード数: {len(all_records)}件")
+    total_records = len(all_records)
+    print(f"[{k_app}] 総処理レコード数: {total_records}件")
 
     # レコード処理
     created_count = updated_count = errors_count = 0
@@ -115,7 +119,11 @@ def process_records(filter_date: str, k_sub: str, k_app: str, k_token: str, noti
     print(f"[{k_app}] レコード処理開始")
     headers = get_notion_headers()
 
-    for rec in all_records:
+    for i, rec in enumerate(all_records):
+        # Progress callback
+        if progress_callback:
+            progress_callback(i + 1, total_records)
+
         try:
             rec_no = int(rec["$id"]["value"])
             # print(f"処理中 (ID={rec_no})")
@@ -133,7 +141,7 @@ def process_records(filter_date: str, k_sub: str, k_app: str, k_token: str, noti
                     updated_count += 1
                     # print(f"🔄 更新成功 (ID={rec_no})")
                 else:
-                    raise Exception(f"Status: {response.status_code}")
+                    raise Exception(f"Status: {response.status_code}, Body: {response.text}")
             else:  # 新規作成
                 response = requests.post(
                     "https://api.notion.com/v1/pages",
@@ -145,7 +153,7 @@ def process_records(filter_date: str, k_sub: str, k_app: str, k_token: str, noti
                     created_count += 1
                     # print(f"✅ 新規作成 (ID={rec_no})")
                 else:
-                    raise Exception(f"Status: {response.status_code}")
+                    raise Exception(f"Status: {response.status_code}, Body: {response.text}")
 
         except Exception as e:
             errors_count += 1
@@ -182,7 +190,7 @@ def create_properties(rec, field_mapping):
 # スクリプトA: kintone(App52)
 # ---------------------------
 
-def run_script_A(filter_date: str):
+def run_script_A(start_date: str, end_date: str, progress_callback=None):
     print("\n===== スクリプトA処理開始 =====")
     k_token = os.environ.get("KINTONE_TOKEN_APP_52")
     if not k_token:
@@ -204,19 +212,21 @@ def run_script_A(filter_date: str):
     }
 
     return process_records(
-        filter_date=filter_date,
+        start_date=start_date,
+        end_date=end_date,
         k_sub="n2amf",
         k_app="52",
         k_token=k_token,
         notion_db_id="1a74dbc3b61180ceb45ad2784be4d549",
-        field_mapping=field_mapping
+        field_mapping=field_mapping,
+        progress_callback=progress_callback
     )
 
 # ---------------------------
 # スクリプトB: kintone(App31)
 # ---------------------------
 
-def run_script_B(filter_date: str):
+def run_script_B(start_date: str, end_date: str, progress_callback=None):
     print("\n===== スクリプトB処理開始 =====")
     k_token = os.environ.get("KINTONE_TOKEN_APP_31")
     if not k_token:
@@ -225,7 +235,7 @@ def run_script_B(filter_date: str):
     field_mapping = {
         "レコード番号": {"type": "number", "field": "$id"},
         "取引先ID": {"type": "number", "field": "取引先ID"},
-        "取引先名": {"type": "title", "field": "取引先名"},
+        "Name": {"type": "title", "field": "取引先名"},
         "営業担当": {"type": "rich_text", "field": "営業担当"},
         "都道府県": {"type": "rich_text", "field": "都道府県__隣に記載されている都道府県をコピペ"},
         "競争方法": {"type": "rich_text", "field": "競争方法"},
@@ -244,10 +254,12 @@ def run_script_B(filter_date: str):
     }
 
     return process_records(
-        filter_date=filter_date,
+        start_date=start_date,
+        end_date=end_date,
         k_sub="n2amf",
         k_app="31",
         k_token=k_token,
         notion_db_id="1ce4dbc3b61180c4899ecaa6feca4800",
-        field_mapping=field_mapping
+        field_mapping=field_mapping,
+        progress_callback=progress_callback
     )

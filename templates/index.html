@@ -1,9 +1,24 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kintone Notion Sync</title>
+
+    <!-- Favicon and App Icons -->
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icon.png">
+    <link rel="apple-touch-icon" href="/static/icon.png">
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+
+    <!-- Theme Color for Mobile Browsers -->
+    <meta name="theme-color" content="#007aff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Kintone Sync">
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -16,29 +31,34 @@
             align-items: center;
             min-height: 100vh;
         }
+
         .container {
             background: white;
             padding: 2rem;
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
             width: 100%;
             max-width: 400px;
         }
+
         h1 {
             text-align: center;
             margin-bottom: 1.5rem;
             font-size: 1.5rem;
             color: #333;
         }
+
         .form-group {
             margin-bottom: 1.5rem;
         }
+
         label {
             display: block;
             margin-bottom: 0.5rem;
             font-weight: 500;
             color: #666;
         }
+
         input[type="date"] {
             width: 100%;
             padding: 12px;
@@ -48,10 +68,12 @@
             box-sizing: border-box;
             transition: border-color 0.3s;
         }
+
         input[type="date"]:focus {
             border-color: #007aff;
             outline: none;
         }
+
         button {
             width: 100%;
             padding: 15px;
@@ -64,13 +86,16 @@
             cursor: pointer;
             transition: background-color 0.3s, transform 0.1s;
         }
+
         button:active {
             transform: scale(0.98);
         }
+
         button:disabled {
             background-color: #ccc;
             cursor: not-allowed;
         }
+
         #result {
             margin-top: 20px;
             padding: 15px;
@@ -79,17 +104,20 @@
             display: none;
             font-size: 0.9rem;
         }
+
         .success {
             color: #28a745;
         }
+
         .error {
             color: #dc3545;
         }
+
         .spinner {
             display: inline-block;
             width: 20px;
             height: 20px;
-            border: 3px solid rgba(255,255,255,0.3);
+            border: 3px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
             border-top-color: white;
             animation: spin 1s ease-in-out infinite;
@@ -97,11 +125,50 @@
             vertical-align: middle;
             display: none;
         }
+
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .progress-bar-wrapper {
+            width: 100%;
+            height: 30px;
+            background-color: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #007aff 0%, #0051d5 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
+            font-size: 0.9rem;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Kintone ⇄ Notion Sync</h1>
@@ -113,6 +180,15 @@
             <span class="spinner" id="spinner"></span>
             <span id="btnText">同期を実行</span>
         </button>
+
+        <!-- Progress Bar -->
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar-wrapper">
+                <div class="progress-bar" id="progressBar">0%</div>
+            </div>
+            <div class="progress-text" id="progressText">データ取得中...</div>
+        </div>
+
         <div id="result"></div>
     </div>
 
@@ -120,12 +196,17 @@
         // Set default date to today
         document.getElementById('date').valueAsDate = new Date();
 
+        let progressInterval;
+
         async function runSync() {
             const date = document.getElementById('date').value;
             const btn = document.getElementById('syncBtn');
             const spinner = document.getElementById('spinner');
             const btnText = document.getElementById('btnText');
             const resultDiv = document.getElementById('result');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
 
             if (!date) {
                 alert("日付を選択してください");
@@ -138,6 +219,33 @@
             btnText.textContent = '同期中...';
             resultDiv.style.display = 'none';
             resultDiv.innerHTML = '';
+            progressContainer.style.display = 'block';
+
+            // Smooth progress animation
+            let progress = 0;
+            const messages = [
+                'データ取得中...',
+                'Kintoneレコードを取得しています...',
+                'Notionと同期中...',
+                '処理中...',
+                'もうすぐ完了します...'
+            ];
+            let msgIndex = 0;
+
+            progressInterval = setInterval(() => {
+                if (progress < 90) {
+                    progress += Math.random() * 15;
+                    if (progress > 90) progress = 90;
+                    progressBar.style.width = progress + '%';
+                    progressBar.textContent = Math.floor(progress) + '%';
+
+                    // Update message
+                    if (progress > 20 * (msgIndex + 1) && msgIndex < messages.length - 1) {
+                        msgIndex++;
+                        progressText.textContent = messages[msgIndex];
+                    }
+                }
+            }, 500);
 
             try {
                 const response = await fetch('/sync', {
@@ -150,35 +258,58 @@
 
                 const data = await response.json();
 
-                if (response.ok) {
-                    let html = `<h3 class="success">完了しました</h3>`;
-                    
-                    html += `<strong>Script A (App 52):</strong><br>`;
-                    html += `新規: ${data.script_a.created}, 更新: ${data.script_a.updated}, エラー: ${data.script_a.errors}<br><br>`;
-                    
-                    html += `<strong>Script B (App 31):</strong><br>`;
-                    html += `新規: ${data.script_b.created}, 更新: ${data.script_b.updated}, エラー: ${data.script_b.errors}`;
+                // Complete progress
+                clearInterval(progressInterval);
+                progressBar.style.width = '100%';
+                progressBar.textContent = '100%';
+                progressText.textContent = '完了！';
 
-                    if (data.script_a.logs.length > 0 || data.script_b.logs.length > 0) {
-                        html += `<br><br><strong>エラーログ:</strong><br>`;
-                        data.script_a.logs.forEach(log => html += `<small>${log}</small><br>`);
-                        data.script_b.logs.forEach(log => html += `<small>${log}</small><br>`);
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+
+                    if (response.ok) {
+                        let html = `<h3 class="success">✅ 同期完了</h3>`;
+
+                        html += `<strong>Script A (App 52):</strong><br>`;
+                        html += `新規: ${data.script_a.created}, 更新: ${data.script_a.updated}, エラー: ${data.script_a.errors}<br><br>`;
+
+                        html += `<strong>Script B (App 31):</strong><br>`;
+                        html += `新規: ${data.script_b.created}, 更新: ${data.script_b.updated}, エラー: ${data.script_b.errors}`;
+
+                        if (data.script_a.logs.length > 0 || data.script_b.logs.length > 0) {
+                            html += `<br><br><strong>エラーログ:</strong><br>`;
+                            data.script_a.logs.forEach(log => html += `<small>${log}</small><br>`);
+                            data.script_b.logs.forEach(log => html += `<small>${log}</small><br>`);
+                        }
+
+                        resultDiv.innerHTML = html;
+                    } else {
+                        resultDiv.innerHTML = `<h3 class="error">❌ エラー</h3><p>${data.error || '不明なエラーが発生しました'}</p>`;
                     }
 
-                    resultDiv.innerHTML = html;
-                } else {
-                    resultDiv.innerHTML = `<h3 class="error">エラー</h3><p>${data.error || '不明なエラーが発生しました'}</p>`;
-                }
+                    resultDiv.style.display = 'block';
+                }, 500);
+
             } catch (error) {
-                resultDiv.innerHTML = `<h3 class="error">通信エラー</h3><p>${error.message}</p>`;
+                clearInterval(progressInterval);
+                progressContainer.style.display = 'none';
+                resultDiv.innerHTML = `<h3 class="error">❌ 通信エラー</h3><p>${error.message}</p>`;
+                resultDiv.style.display = 'block';
             } finally {
                 // Reset UI
                 btn.disabled = false;
                 spinner.style.display = 'none';
                 btnText.textContent = '同期を実行';
-                resultDiv.style.display = 'block';
+
+                // Reset progress
+                setTimeout(() => {
+                    progressBar.style.width = '0%';
+                    progressBar.textContent = '0%';
+                    progressText.textContent = 'データ取得中...';
+                }, 1000);
             }
         }
     </script>
 </body>
+
 </html>
