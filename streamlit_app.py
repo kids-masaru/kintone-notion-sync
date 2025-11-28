@@ -16,23 +16,42 @@ import base64
 
 st.set_page_config(page_title="Kintone-Notion Sync", page_icon="static/icon.png")
 
-def get_base64_of_bin_file(bin_file):
-    with open(bin_file, 'rb') as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
+def set_icons():
+    # staticフォルダがサーブされるようになったので、相対パスで指定
+    # Streamlit Cloudの構造に合わせてパスを調整
+    icon_path = "app/static/icon.png"
+    manifest_path = "app/static/manifest.json"
+    
+    # JavaScriptを使ってheadにタグを追加する
+    # これにより、Streamlitのiframe内だけでなく、可能な限り認識されやすくする
+    st.markdown(
+        f"""
+            <script>
+                var link = document.querySelector("link[rel~='icon']");
+                if (!link) {{
+                    link = document.createElement('link');
+                    link.rel = 'icon';
+                    document.getElementsByTagName('head')[0].appendChild(link);
+                }}
+                link.href = '{icon_path}';
+                
+                var appleLink = document.createElement('link');
+                appleLink.rel = 'apple-touch-icon';
+                appleLink.href = '{icon_path}';
+                document.getElementsByTagName('head')[0].appendChild(appleLink);
 
-def set_apple_touch_icon(image_path):
-    try:
-        bin_str = get_base64_of_bin_file(image_path)
-        page_icon_html = f"""
-        <link rel="apple-touch-icon" href="data:image/png;base64,{bin_str}" />
-        <link rel="icon" href="data:image/png;base64,{bin_str}" />
-        """
-        st.markdown(page_icon_html, unsafe_allow_html=True)
-    except Exception as e:
-        st.warning(f"Could not load icon for home screen: {e}")
+                var manifestLink = document.createElement('link');
+                manifestLink.rel = 'manifest';
+                manifestLink.href = '{manifest_path}';
+                document.getElementsByTagName('head')[0].appendChild(manifestLink);
+            </script>
+            <link rel="apple-touch-icon" href="{icon_path}" />
+            <link rel="manifest" href="{manifest_path}" />
+        """,
+        unsafe_allow_html=True
+    )
 
-set_apple_touch_icon("static/icon.png")
+set_icons()
 
 st.title("🔄 Kintone-Notion Sync App")
 
